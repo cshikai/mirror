@@ -1,7 +1,7 @@
 
 
 # Mirror
-![System Overview](github.com/cshikai/mirror/overview.png)
+![System Overview](overview.png)
 
 Basic Information Retrieval system designed for multimedia documents and future extensibility. 
 
