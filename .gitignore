@@ -1,0 +1,5 @@
+elasticsearch_volume
+elastdocker
+data/
+notebooks/
+build/volumes

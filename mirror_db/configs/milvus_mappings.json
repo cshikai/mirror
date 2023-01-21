@@ -1,0 +1,11 @@
+{
+    "embeddings":{
+        "data_type": "FLOAT_VECTOR",
+        "embedding_dimensions": 512
+    },
+    "es_id": {
+        "data_type": "VARCHAR",
+        "is_primary": true,
+        "max_length": 200
+    }
+}

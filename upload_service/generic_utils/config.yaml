@@ -1,0 +1,4 @@
+MILVUS:
+  HOST: 'standalone'
+  PORT: '19530'
+  COLLECTION: 'moat'

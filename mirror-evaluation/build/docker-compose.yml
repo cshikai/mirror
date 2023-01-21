@@ -1,0 +1,14 @@
+version: "3.4"
+
+services:
+  local:
+    build: ./
+    stdin_open: true
+    tty: true
+    image: evaluation:latest
+    volumes:
+      - ../:/evaluation
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    shm_size: 4gb

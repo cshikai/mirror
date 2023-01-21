@@ -1,0 +1,57 @@
+{
+    "mappings": {
+        "dynamic_templates": [
+            {
+                "strings": {
+                    "path_match": "*",
+                    "match_mapping_type": "string",
+                    "mapping": {
+                        "type": "keyword"
+                    }
+                }
+            }
+        ],
+        "properties": {
+            "doc_id": {
+                "type": "keyword"
+            },
+            "content": {
+                "type": "text"
+            },
+            "content_type": {
+                "type": "keyword"
+            },
+            "title": {
+                "type": "text"
+            },
+            "upload_timestamp": {
+                
+                "type":   "date",
+                "format": "yyyy-MM-dd'T'HH:mm:ss"
+                
+            },
+            "doc_timestamp": {
+                
+                "type":   "date",
+                "format": "yyyy-MM-dd'T'HH:mm:ss"
+                
+            },
+            "image_object_store_url": {
+                "type": "keyword"
+            },
+            "audio_object_store_url": {
+                "type": "keyword"
+            },
+            "language": {
+                "type": "keyword"
+            },
+            "medium": {
+                "type": "keyword"
+            },
+            "source": {
+                "type": "keyword"
+            }
+            
+        }
+    }
+}

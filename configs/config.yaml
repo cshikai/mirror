@@ -1,0 +1,48 @@
+elasticsearch:
+  mappings_file: ../configs/es_mappings.json
+  host: elasticsearch
+  port: 9200
+  username: elastic
+  password: changeme
+  index: moat
+  scheme: https
+  verify_certs: false
+
+gateway:
+  host: gateway
+  port: 5602
+
+uploader:
+  host: uploader
+  port: 8000
+
+kafka:
+  host: broker
+  port: 29092
+
+milvus:
+  alias: default
+  host: standalone
+  port: 19530
+  mappings_file: ../configs/milvus_mappings.json
+  collection_name: moat
+  embeddings_field: embeddings
+  index_type: IVF_FLAT
+  metric_type: IP
+  search_field: embeddings
+
+query_service:
+  top_k: 10
+  limit: 10
+  consistency_level: "Strong"
+
+query_embedder:
+  host: query_embedder
+  port: 8001
+
+embedding_upload_service:
+  flush_period: 5
+  batch_size: 2
+
+ui_service:
+  batch_size: 1000

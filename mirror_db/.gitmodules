@@ -1,0 +1,3 @@
+[submodule "elastdocker"]
+	path = elastdocker
+	url = https://github.com/sherifabdlnaby/elastdocker.git

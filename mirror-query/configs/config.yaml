@@ -1,0 +1,22 @@
+elasticsearch:
+  host: 'elasticsearch'
+  port: 9200
+  username: 'elastic'
+  password: 'changeme'
+  index: 'moat'
+
+milvus:
+  alias: default
+  host: standalone
+  port: 19530
+  mappings_file: ../configs/milvus_mappings.json
+  collection_name: moat
+  embeddings_field: embeddings
+  index_type: IVF_FLAT
+  metric_type: IP
+  search_field: embeddings
+  
+query_service:
+  top_k: 10
+  limit: 10
+  consistency_level: "Strong"

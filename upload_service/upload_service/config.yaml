@@ -1,0 +1,9 @@
+ELASTICSEARCH:
+  URL: 'https://elasticsearch:9200'
+  INDEX_NAME: 'moat'
+  ELASTIC_USERNAME: elastic
+  ELASTIC_PASSWORD: changeme
+
+KAFKA:
+  URL: 'broker:29092'
+  TOPIC: 'queue-upload-semantic-text'

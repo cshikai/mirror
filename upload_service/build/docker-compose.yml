@@ -1,0 +1,16 @@
+version: '3.4'
+
+services:
+  uploader:
+    build: ../upload_service/
+    ports:
+      #to the host
+      - 8000:8000 #host:container
+    stdin_open: true
+    tty: true
+    ulimits:
+      memlock: -1 # set upper limit for how much memory is locked for the container (-1 means lock as much as the container uses)
+    shm_size: 4gb
+    volumes:
+      - ../upload_service:/src
+    command: uvicorn main:api --host 0.0.0.0 --reload

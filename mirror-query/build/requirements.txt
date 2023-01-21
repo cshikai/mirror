@@ -1,0 +1,8 @@
+uvicorn==0.13.4
+pandas
+numpy
+requests
+farm-haystack
+fastapi
+elasticsearch
+pymilvus

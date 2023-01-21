@@ -1,0 +1,20 @@
+cd ../
+git clone https://github.com/sherifabdlnaby/elastdocker
+cd elastdocker
+make setup
+
+cd ../text_entity_extraction/multimodal-jerex
+ ./scripts/fetch_models.sh
+
+sysctl -w vm.max_map_count=262144
+
+docker-compose up -d
+
+
+#list of things to download
+# elasticdocker
+# blink models and seed entities
+# seed image data
+# example data
+# jerex model
+

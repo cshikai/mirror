@@ -1,0 +1,23 @@
+version: '3.4'
+
+services:
+  query_embedder:
+      image: mirror-query-embedder:latest
+      stdin_open: true
+      tty: true
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: 1
+                capabilities: [gpu]
+      volumes:
+        - ../models:/models
+        - ../src:/query_embedder
+      command: "/bin/bash -c 'sadleep 30 && uvicorn QueryService:app --host 0.0.0.0 --port 8001 --relo'"
+      ports:
+       - 8001:8001
+      ulimits:
+        memlock: -1
+        stack: 67108864

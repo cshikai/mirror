@@ -1,0 +1,50 @@
+version: '3.4'
+
+services:
+  aggregator:
+      image: query_manager:latest
+      build: ./
+      stdin_open: true
+      tty: true
+      # build:
+      #     context: .
+      #     dockerfile: Dockerfile
+      volumes:
+        # - ./aggregator:/app
+        # - ./hs_functions.py:/app/hs_functions.py
+        - ../:/query_manager
+      command: "/bin/bash -c 'sleep 30 && uvicorn api_service:app --host 0.0.0.0 --port 3000 --reload'"
+      ports:
+       - 3000:3000
+      ulimits:
+        memlock: -1
+        stack: 67108864
+      shm_size: 32gb
+      networks:
+        - backend
+
+  elasticsearch:
+      image: docker.elastic.co/elasticsearch/elasticsearch:8.2.0
+      user: elasticsearch
+      environment:
+        - ELASTIC_USERNAME=elastic
+        - ELASTIC_PASSWORD=dh123
+        # - cluster.name=docker-cluster
+        # - bootstrap.memory_lock=true
+        # - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+        - xpack.security.enabled=false
+        - xpack.security.enrollment.enabled=false
+        - discovery.type=single-node
+      ports:
+        - 9200:9200
+      ulimits:
+        memlock:
+          soft: -1
+          hard: -1
+      restart: on-failure:5      
+      networks:
+          - backend
+
+networks:  
+  backend: 
+    driver: bridge

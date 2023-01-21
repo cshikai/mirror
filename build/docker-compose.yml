@@ -1,0 +1,261 @@
+version: '3.4'
+
+# networks:
+#   default:
+#     name: multimodal
+#     external: true
+
+volumes:
+  elasticsearch-data:
+
+secrets:
+  elasticsearch.keystore:
+    file: ../mirror_db/elastdocker/secrets/keystore/elasticsearch.keystore
+  elasticsearch.service_tokens:
+    file: ../mirror_db/elastdocker/secrets/service_tokens
+  elastic.ca:
+    file: ../mirror_db/elastdocker/secrets/certs/ca/ca.crt
+  elasticsearch.certificate:
+    file: ../mirror_db/elastdocker/secrets/certs/elasticsearch/elasticsearch.crt
+  elasticsearch.key:
+    file: ../mirror_db/elastdocker/secrets/certs/elasticsearch/elasticsearch.key
+  kibana.certificate:
+    file: ../mirror_db/elastdocker/secrets/certs/kibana/kibana.crt
+  kibana.key:
+    file: ../mirror_db/elastdocker/secrets/certs/kibana/kibana.key
+
+services:
+
+  elasticsearch:
+    image: elastdocker/elasticsearch:${ELK_VERSION}
+    restart: unless-stopped
+    env_file:
+    - ./.env
+    environment:
+      ELASTIC_USERNAME: ${ELASTIC_USERNAME}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ELASTIC_CLUSTER_NAME: ${ELASTIC_CLUSTER_NAME}
+      ELASTIC_NODE_NAME: ${ELASTIC_NODE_NAME}
+      ELASTIC_INIT_MASTER_NODE: ${ELASTIC_INIT_MASTER_NODE}
+      ELASTIC_DISCOVERY_SEEDS: ${ELASTIC_DISCOVERY_SEEDS}
+      ES_JAVA_OPTS: "-Xmx${ELASTICSEARCH_HEAP} -Xms${ELASTICSEARCH_HEAP} -Des.enforce.bootstrap.checks=true -Dlog4j2.formatMsgNoLookups=true"
+      bootstrap.memory_lock: "true"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      - ../mirror_db/elastdocker/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+      - ../mirror_db/elastdocker/elasticsearch/config/log4j2.properties:/usr/share/elasticsearch/config/log4j2.properties
+    secrets:
+      - source: elasticsearch.keystore
+        target: /usr/share/elasticsearch/config/elasticsearch.keystore
+      - source: elasticsearch.service_tokens
+        target: /usr/share/elasticsearch/config/service_tokens
+      - source: elastic.ca
+        target: /usr/share/elasticsearch/config/certs/ca.crt
+      - source: elasticsearch.certificate
+        target: /usr/share/elasticsearch/config/certs/elasticsearch.crt
+      - source: elasticsearch.key
+        target: /usr/share/elasticsearch/config/certs/elasticsearch.key
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 200000
+        hard: 200000
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -sf --insecure https://$ELASTIC_USERNAME:$ELASTIC_PASSWORD@localhost:9200/_cat/health | grep -ioE 'green|yellow' || echo 'not green/yellow cluster status'"
+        ]
+
+  kibana:
+    image: elastdocker/kibana:${ELK_VERSION}
+    restart: unless-stopped
+    volumes:
+      - ../mirror_db/elastdocker/kibana/config/:/usr/share/kibana/config:ro
+    environment:
+      ELASTIC_USERNAME: ${ELASTIC_USERNAME}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ELASTICSEARCH_HOST_PORT: https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
+    env_file:
+      - ../mirror_db/elastdocker/secrets/.env.kibana.token
+    secrets:
+      - source: elastic.ca
+        target: /certs/ca.crt
+      - source: kibana.certificate
+        target: /certs/kibana.crt
+      - source: kibana.key
+        target: /certs/kibana.key
+    ports:
+      - "5601:5601"
+
+  mirror_db:
+    image: incub_mirror_db:latest
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    volumes:
+      - ../mirror_db/src:/mirror_db/src
+      - ../configs:/mirror_db/configs
+    ulimits:
+      memlock: -1 # set upper limit for how much memory is locked for the container (-1 means lock as much as the container uses)
+    shm_size: 32gb # set upper limit for how much shared memory container can use
+  
+  uploader:
+    image: build_uploader:latest
+    ports:
+      #to the host
+      - 8000:8000 #host:container
+    stdin_open: true
+    tty: true
+    ulimits:
+      memlock: -1 # set upper limit for how much memory is locked for the container (-1 means lock as much as the container uses)
+    shm_size: 4gb
+    volumes:
+      - ../upload_service/upload_service:/src
+    command: uvicorn main:api --host 0.0.0.0 --reload
+
+  query_service:
+    image: mirror-query-service:latest
+    stdin_open: true
+    tty: true
+    volumes:
+      - ../configs:/configs
+      - ../mirror-query/src:/query_manager
+    command: "/bin/bash -c 'sleep 30 && uvicorn api_service:app --host 0.0.0.0 --port 3000 --reload'"
+    ports:
+     - 3000:3000
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    shm_size: 16gb
+
+  ui: 
+    image: mirror-ui-service:latest
+    stdin_open: true
+    tty: true
+    volumes:
+      - ../mirror-ui/src:/ui
+      - ../configs:/ui/configs
+    command: "streamlit run app.py"
+    ports:
+     - 8501:8501
+
+  gateway:
+      image: mirror-gateway:latest
+      stdin_open: true
+      tty: true
+      volumes:
+        - ../gateway/src:/gateway
+      command: "/bin/bash -c 'sleep 30 && uvicorn main:app --host 0.0.0.0 --port 5602 --reload'"
+      ports:
+       - 5602:5602
+  #milvus services: etcd, minio, standalone
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.0
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2022-03-17T06-34-49Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.1.4
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.0
+    hostname: zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  broker:
+    image: confluentinc/cp-kafka:7.0.0
+    container_name: broker
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  embedding-upload:
+    image: mirror-embedding-upload:latest
+    # build: ./
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+    - ../mirror-embedding-upload/src:/embedding-upload/src
+    - ../mirror-embedding-upload/models:/embedding-upload/models
+    - ../configs:/configs
+    # ports:
+    #   - 29092:29092
+    ulimits:
+      memlock: -1
+      stack: 67108864
+
+  query_embedder:
+    image: mirror-query-embedder:latest
+    stdin_open: true
+    tty: true
+    volumes:
+      - ../mirror-embedding-upload/models:/models
+      - ../mirror-query-embedder/src:/query_embedder
+    command: "/bin/bash -c 'sleep 30 && uvicorn QueryService:app --host 0.0.0.0 --port 8001 --reload'"
+    ports:
+      - 8001:8001
+    ulimits:
+      memlock: -1
+      stack: 67108864

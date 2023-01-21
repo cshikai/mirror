@@ -1,0 +1,112 @@
+version: '3.4'
+
+volumes:
+  elasticsearch-data:
+    driver_opts:
+      type: none
+      o: bind
+      device: ./elasticsearch_volume
+
+secrets:
+  elasticsearch.keystore:
+    file: ../elastdocker/secrets/keystore/elasticsearch.keystore
+  elasticsearch.service_tokens:
+    file: ../elastdocker/secrets/service_tokens
+  elastic.ca:
+    file: ../elastdocker/secrets/certs/ca/ca.crt
+  elasticsearch.certificate:
+    file: ../elastdocker/secrets/certs/elasticsearch/elasticsearch.crt
+  elasticsearch.key:
+    file: ../elastdocker/secrets/certs/elasticsearch/elasticsearch.key
+  kibana.certificate:
+    file: ../elastdocker/secrets/certs/kibana/kibana.crt
+  kibana.key:
+    file: ../elastdocker/secrets/certs/kibana/kibana.key
+
+services:
+  mirror_db:
+    build: ./
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    volumes:
+      - ../src:/src
+      - ../configs:/configs
+    ulimits:
+      memlock: -1 # set upper limit for how much memory is locked for the container (-1 means lock as much as the container uses)
+    shm_size: 32gb # set upper limit for how much shared memory container can use
+
+  elasticsearch:
+    image: elastdocker/elasticsearch:${ELK_VERSION}
+    build:
+      context: ../elastdocker/elasticsearch/
+      args:
+        ELK_VERSION: ${ELK_VERSION}
+    restart: unless-stopped
+    environment:
+      ELASTIC_USERNAME: ${ELASTIC_USERNAME}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ELASTIC_CLUSTER_NAME: ${ELASTIC_CLUSTER_NAME}
+      ELASTIC_NODE_NAME: ${ELASTIC_NODE_NAME}
+      ELASTIC_INIT_MASTER_NODE: ${ELASTIC_INIT_MASTER_NODE}
+      ELASTIC_DISCOVERY_SEEDS: ${ELASTIC_DISCOVERY_SEEDS}
+      ES_JAVA_OPTS: "-Xmx${ELASTICSEARCH_HEAP} -Xms${ELASTICSEARCH_HEAP} -Des.enforce.bootstrap.checks=true -Dlog4j2.formatMsgNoLookups=true"
+      bootstrap.memory_lock: "true"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      - ../elastdocker/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+      - ../elastdocker/elasticsearch/config/log4j2.properties:/usr/share/elasticsearch/config/log4j2.properties
+    secrets:
+      - source: elasticsearch.keystore
+        target: /usr/share/elasticsearch/config/elasticsearch.keystore
+      - source: elasticsearch.service_tokens
+        target: /usr/share/elasticsearch/config/service_tokens
+      - source: elastic.ca
+        target: /usr/share/elasticsearch/config/certs/ca.crt
+      - source: elasticsearch.certificate
+        target: /usr/share/elasticsearch/config/certs/elasticsearch.crt
+      - source: elasticsearch.key
+        target: /usr/share/elasticsearch/config/certs/elasticsearch.key
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 200000
+        hard: 200000
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -sf --insecure https://$ELASTIC_USERNAME:$ELASTIC_PASSWORD@localhost:9200/_cat/health | grep -ioE 'green|yellow' || echo 'not green/yellow cluster status'"
+        ]
+
+  kibana:
+    image: elastdocker/kibana:${ELK_VERSION}
+    build:
+      context: ../elastdocker/kibana/
+      args:
+        ELK_VERSION: $ELK_VERSION
+    restart: unless-stopped
+    volumes:
+      - ../elastdocker/kibana/config/:/usr/share/kibana/config:ro
+    environment:
+      ELASTIC_USERNAME: ${ELASTIC_USERNAME}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ELASTICSEARCH_HOST_PORT: https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
+    env_file:
+      - ../elastdocker/secrets/.env.kibana.token
+    secrets:
+      - source: elastic.ca
+        target: /certs/ca.crt
+      - source: kibana.certificate
+        target: /certs/kibana.crt
+      - source: kibana.key
+        target: /certs/kibana.key
+    ports:
+      - "5601:5601"
